@@ -7,10 +7,15 @@ import os
 from dotenv import load_dotenv
 import datetime
 
-load_dotenv()  # Load environment variables from .env file
+# Tell python-dotenv to overwrite any existing env vars with those from .env
+load_dotenv(dotenv_path=".env")
 
-# Get the database connection string from .env (set this in Railway later)
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/dbname")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("Missing DATABASE_URL in environment or .env")
+
+print("🔍 DATABASE_URL is:", DATABASE_URL)
+
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
