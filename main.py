@@ -48,14 +48,14 @@ class KillEventModel(Base):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async def _sync_create():
-        # this runs in a worker thread
+    def create_tables():
         Base.metadata.create_all(bind=engine)
 
     try:
-        await asyncio.to_thread(_sync_create)
+        # run the sync `create_all` in a thread
+        await asyncio.to_thread(create_tables)
     except OperationalError:
-        # swallow “DB not up yet” errors
+        # swallow “DB not ready yet” errors
         pass
 
     yield
