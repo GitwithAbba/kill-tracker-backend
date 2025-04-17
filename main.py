@@ -44,13 +44,17 @@ class KillEventModel(Base):
 # ─── Auto‑create tables ──────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    def create_tables():
-        Base.metadata.create_all(bind=engine)
-
-    try:
-        await asyncio.to_thread(create_tables)
-    except OperationalError:
-        pass
+    for attempt in range(1, 11):
+        try:
+            # run create_all in a background thread
+            await asyncio.to_thread(Base.metadata.create_all, bind=engine)
+            print("✅ Tables are ready")
+            break
+        except OperationalError:
+            print(f"⚠️  DB not ready (attempt {attempt}/10), retrying in 2s…")
+            await asyncio.sleep(2)
+    else:
+        raise RuntimeError("❌ Could not initialize DB after 10 attempts")
     yield
 
 
