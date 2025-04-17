@@ -6,8 +6,11 @@ from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 import datetime
+import time
 from pathlib import Path
 from contextlib import asynccontextmanager
+from sqlalchemy.exc import OperationalError
+
 
 # only load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
