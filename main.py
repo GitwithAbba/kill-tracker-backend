@@ -11,8 +11,9 @@ import datetime
 load_dotenv(dotenv_path=".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("Missing DATABASE_URL in environment or .env")
+# If Railway (or any env) has already set DATABASE_URL, skip loading .env
+if os.getenv("DATABASE_URL") is None:
+    load_dotenv(dotenv_path=".env")
 
 print("🔍 DATABASE_URL is:", DATABASE_URL)
 
