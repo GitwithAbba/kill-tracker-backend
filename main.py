@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, String, Integer, DateTime
 from sqlalchemy.ext.declarative import declarative_base
@@ -9,47 +10,38 @@ import os, datetime, asyncio
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Load .env.local if present
+# ─── Load environment ────────────────────────────────────────────────────────────
 env_path = Path(__file__).parent / ".env.local"
 if env_path.exists():
     load_dotenv(env_path)
 
-# Read DATABASE_URL (Railway injects in production; .env.local overrides for dev)
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.environ["DATABASE_URL"]
 print(f"🔍 DATABASE_URL is: {DATABASE_URL}")
 
-# Declarative base
+# ─── SQLAlchemy setup ───────────────────────────────────────────────────────────
 Base = declarative_base()
 
-# Create engine: SQLite needs check_same_thread; Postgres gets connect_timeout
 if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args={"check_same_thread": False},
-    )
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args={"connect_timeout": 5},
-    )
+    engine = create_engine(DATABASE_URL, connect_args={"connect_timeout": 5})
 
-# Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# Model definition
+# ─── Models ─────────────────────────────────────────────────────────────────────
 class KillEventModel(Base):
     __tablename__ = "kill_events"
     id = Column(Integer, primary_key=True, index=True)
-    player = Column(String, nullable=False)
-    victim = Column(String, nullable=False)
-    time = Column(DateTime, nullable=False)
-    zone = Column(String, nullable=False)
-    weapon = Column(String, nullable=False)
-    damage_type = Column(String, nullable=False)
+    player = Column(String)
+    victim = Column(String)
+    time = Column(DateTime)
+    zone = Column(String)
+    weapon = Column(String)
+    damage_type = Column(String)
 
 
-# Lifespan for auto-migration
+# ─── Auto‑create tables ──────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     def create_tables():
@@ -62,11 +54,24 @@ async def lifespan(app: FastAPI):
     yield
 
 
-# Application instance
+# ─── App & Middleware ────────────────────────────────────────────────────────────
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # allow all for now
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Pydantic schema
+
+# ─── Health check ───────────────────────────────────────────────────────────────
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+# ─── Schemas & Endpoints ────────────────────────────────────────────────────────
 class KillEvent(BaseModel):
     player: str
     victim: str
@@ -76,7 +81,6 @@ class KillEvent(BaseModel):
     damage_type: str
 
 
-# Create (write) endpoint
 @app.post("/reportKill")
 def report_kill(event: KillEvent):
     db = SessionLocal()
@@ -93,12 +97,10 @@ def report_kill(event: KillEvent):
     return {"status": "ok", "message": "Kill recorded"}
 
 
-# Read endpoint
 @app.get("/kills")
 def list_kills():
     db = SessionLocal()
     try:
-        events = db.query(KillEventModel).all()
         return [
             {
                 "id": e.id,
@@ -109,7 +111,7 @@ def list_kills():
                 "weapon": e.weapon,
                 "damage_type": e.damage_type,
             }
-            for e in events
+            for e in db.query(KillEventModel).all()
         ]
     finally:
         db.close()
