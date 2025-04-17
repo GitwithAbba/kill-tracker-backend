@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 from sqlalchemy.exc import OperationalError
+import asyncio
 
 
 # only load .env.local if present
@@ -24,7 +25,11 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 print(f"🔍 DATABASE_URL is: {DATABASE_URL}")
 
 
-engine = create_engine(DATABASE_URL)
+# right after you read DATABASE_URL:
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"connect_timeout": 5},  # fail fast if DB not ready
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -43,16 +48,16 @@ class KillEventModel(Base):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # on startup, retry creating tables up to 5 times
-    for attempt in range(5):
-        try:
-            Base.metadata.create_all(bind=engine)
-            break
-        except OperationalError:
-            if attempt < 4:
-                time.sleep(3)
-            else:
-                raise
+    async def _sync_create():
+        # this runs in a worker thread
+        Base.metadata.create_all(bind=engine)
+
+    try:
+        await asyncio.to_thread(_sync_create)
+    except OperationalError:
+        # swallow “DB not up yet” errors
+        pass
+
     yield
     # (you could do shutdown cleanup here if needed)
 
