@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 import datetime
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 # only load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -37,10 +38,23 @@ class KillEventModel(Base):
     damage_type = Column(String)
 
 
-# Create tables if not exist (for quick setup, otherwise use migrations)
-Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # on startup, retry creating tables up to 5 times
+    for attempt in range(5):
+        try:
+            Base.metadata.create_all(bind=engine)
+            break
+        except OperationalError:
+            if attempt < 4:
+                time.sleep(3)
+            else:
+                raise
+    yield
+    # (you could do shutdown cleanup here if needed)
 
-app = FastAPI()
+
+app = FastAPI(lifespan=lifespan)
 
 
 class KillEvent(BaseModel):
