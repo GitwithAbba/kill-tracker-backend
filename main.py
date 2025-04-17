@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 import datetime
+from pathlib import Path
 
 # only load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
