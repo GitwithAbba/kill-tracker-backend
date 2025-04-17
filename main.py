@@ -57,12 +57,18 @@ async def lifespan(app: FastAPI):
 # ─── App & Middleware ────────────────────────────────────────────────────────────
 app = FastAPI(lifespan=lifespan)
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # allow all for now
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+def health_check():
+    return {"status": "up"}
 
 
 # ─── Health check ───────────────────────────────────────────────────────────────
