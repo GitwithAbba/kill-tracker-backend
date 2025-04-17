@@ -7,15 +7,16 @@ import os
 from dotenv import load_dotenv
 import datetime
 
-# Tell python-dotenv to overwrite any existing env vars with those from .env
-load_dotenv(dotenv_path=".env")
+# only load .env.local if present
+env_path = Path(__file__).parent / ".env.local"
+if env_path.exists():
+    load_dotenv(env_path)
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-# If Railway (or any env) has already set DATABASE_URL, skip loading .env
-if os.getenv("DATABASE_URL") is None:
-    load_dotenv(dotenv_path=".env")
-
-print("🔍 DATABASE_URL is:", DATABASE_URL)
+# now DATABASE_URL will come from:
+#  1) Railway’s injected env‐var in CI/production
+#  2) your .env.local when you run locally
+DATABASE_URL = os.environ["DATABASE_URL"]
+print(f"🔍 DATABASE_URL is: {DATABASE_URL}")
 
 
 engine = create_engine(DATABASE_URL)
