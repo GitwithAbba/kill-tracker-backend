@@ -127,6 +127,15 @@ def create_key(discord_id: str = Header(..., alias="X-Discord-ID")):
         db.close()
 
 
+# VALIDATE KEY
+@app.get("/keys/validate", tags=["Auth"])
+def validate_key(api_key: APIKey = Depends(get_api_key)):
+    """
+    Simply returns 200 OK if the Bearer token was valid.
+    """
+    return {"status": "ok"}
+
+
 # ─── Report Kill (protected)
 @app.post("/reportKill", tags=["Kills"])
 def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
