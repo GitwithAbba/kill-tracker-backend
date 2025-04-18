@@ -113,7 +113,7 @@ class KillEvent(BaseModel):
     zone: str
     weapon: str
     damage_type: str
-    mode: str  # ← require the client to tell us “pu”, “ac”, etc.
+    mode: str = "pu-kill"  # ← require the client to tell us “pu”, “ac”, etc.
 
 
 # ─── Create API Key ──────────────────────────────────────────────────────────────
