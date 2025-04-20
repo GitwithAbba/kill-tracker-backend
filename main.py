@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Optional
 import requests
-from bs4 import BeautifulSoup4
+from bs4 import BeautifulSoup
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -45,7 +45,7 @@ def fetch_rsi_profile(handle: str) -> dict:
     """
     url = f"https://robertsspaceindustries.com/citizens/{handle}"
     r = requests.get(url, timeout=5)
-    soup = BeautifulSoup4(r.text, "html.parser")
+    soup = BeautifulSoup(r.text, "html.parser")
 
     # og:image for avatar
     ogimg = soup.find("meta", property="og:image")
