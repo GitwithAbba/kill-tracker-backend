@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 import os, datetime, asyncio, uuid
 from dotenv import load_dotenv
 from pathlib import Path
+from typing import List
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -97,6 +98,33 @@ class KillEvent(BaseModel):
     weapon: str
     damage_type: str
     mode: str = "pu-kill"  # ← defaults to public‑universe
+
+
+# in‐memory store; swap for your DB as needed
+deaths: List[dict] = []
+
+
+class DeathEvent(BaseModel):
+    killer: str
+    victim: str
+    time: str
+    zone: str
+    weapon: str
+    damage_type: str
+    rsi_profile: str
+    game_mode: str
+    killers_ship: str
+
+
+@app.post("/reportDeath", status_code=201)
+async def report_death(evt: DeathEvent):
+    deaths.append(evt.dict())
+    return {"ok": True}
+
+
+@app.get("/deaths", response_model=List[DeathEvent])
+async def list_deaths():
+    return deaths
 
 
 # ─── Auth dependency
