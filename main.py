@@ -9,7 +9,9 @@ from contextlib import asynccontextmanager
 import os, datetime, asyncio, uuid
 from dotenv import load_dotenv
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+import requests
+from bs4 import BeautifulSoup4
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -32,6 +34,38 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
+def fetch_rsi_profile(handle: str) -> dict:
+    """
+    Scrape RSI citizen page for avatar and organization.
+    Returns:
+      {
+        "avatar_url": Optional[str],
+        "organization": {"name": Optional[str], "url": Optional[str]}
+      }
+    """
+    url = f"https://robertsspaceindustries.com/citizens/{handle}"
+    r = requests.get(url, timeout=5)
+    soup = BeautifulSoup4(r.text, "html.parser")
+
+    # og:image for avatar
+    ogimg = soup.find("meta", property="og:image")
+    avatar = ogimg["content"] if ogimg else None
+
+    # example selector—inspect the RSI page to confirm
+    org_elem = soup.select_one("a.org-link")
+    if org_elem:
+        org_name = org_elem.text.strip()
+        org_url = org_elem["href"]
+    else:
+        org_name = None
+        org_url = None
+
+    return {
+        "avatar_url": avatar,
+        "organization": {"name": org_name, "url": org_url},
+    }
+
+
 # ─── Models
 class KillEventModel(Base):
     __tablename__ = "kill_events"
@@ -43,6 +77,9 @@ class KillEventModel(Base):
     weapon = Column(String)
     damage_type = Column(String)
     mode = Column(String)
+    avatar_url = Column(String, nullable=True)
+    organization_name = Column(String, nullable=True)
+    organization_url = Column(String, nullable=True)
 
 
 class APIKey(Base):
@@ -98,6 +135,8 @@ class KillEvent(BaseModel):
     weapon: str
     damage_type: str
     mode: str = "pu-kill"  # ← defaults to public‑universe
+    avatar_url: Optional[str] = None
+    organization: Optional[dict] = None
 
 
 # in‐memory store; swap for your DB as needed
@@ -169,7 +208,25 @@ def validate_key(api_key: APIKey = Depends(get_api_key)):
 def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
     db = SessionLocal()
     try:
-        db_event = KillEventModel(**event.dict())
+        # 1) scrape RSI for the killer
+        killer_meta = fetch_rsi_profile(event.player)
+
+        # 2) scrape RSI for the victim
+        victim_meta = fetch_rsi_profile(event.victim)
+
+        # 3) build your dict() and inject the new fields
+        data = event.dict()
+        data["avatar_url"] = killer_meta["avatar_url"]
+        data["organization"] = victim_meta["organization"]
+
+        # 4) pull out organization sub‑fields for your SQL model
+        org = data["organization"]
+        db_event = KillEventModel(
+            **{k: v for k, v in data.items() if k in KillEventModel.__table__.columns},
+            organization_name=org.get("name"),
+            organization_url=org.get("url"),
+        )
+
         db.add(db_event)
         db.commit()
         return {"status": "ok", "message": "Kill recorded"}
