@@ -35,23 +35,13 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
 def fetch_rsi_profile(handle: str) -> dict:
-    """
-    Scrape RSI citizen page for avatar and organization.
-    Returns:
-      {
-        "avatar_url": Optional[str],
-        "organization": {"name": Optional[str], "url": Optional[str]}
-      }
-    """
     url = f"https://robertsspaceindustries.com/citizens/{handle}"
     r = requests.get(url, timeout=5)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # og:image for avatar
     ogimg = soup.find("meta", property="og:image")
     avatar = ogimg["content"] if ogimg else None
 
-    # example selector—inspect the RSI page to confirm
     org_elem = soup.select_one("a.org-link")
     if org_elem:
         org_name = org_elem.text.strip()
@@ -192,6 +182,12 @@ def validate_key(api_key: APIKey = Depends(get_api_key)):
 def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
     db = SessionLocal()
     try:
+        # 1) scrape killer
+        killer_meta = fetch_rsi_profile(event.player)
+        # 2) scrape victim
+        victim_meta = fetch_rsi_profile(event.victim)
+
+        # 3) build your model
         db_event = KillEventModel(
             player=event.player,
             victim=event.victim,
@@ -204,6 +200,9 @@ def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
             mode=event.mode,
             client_ver=event.client_ver,
             killers_ship=event.killers_ship,
+            avatar_url=killer_meta["avatar_url"],
+            organization_name=victim_meta["organization"]["name"],
+            organization_url=victim_meta["organization"]["url"],
         )
         db.add(db_event)
         db.commit()
@@ -221,23 +220,24 @@ def list_kills():
     db = SessionLocal()
     try:
         evs = db.query(KillEventModel).order_by(KillEventModel.id).all()
-        out = []
-        for e in evs:
-            out.append(
-                {
-                    "id": e.id,
-                    "player": e.player,
-                    "victim": e.victim,
-                    "time": e.time.isoformat(),
-                    "zone": e.zone,
-                    "weapon": e.weapon,
-                    "damage_type": e.damage_type,
-                    "mode": e.mode,
-                    "game_mode": e.game_mode,
-                    "rsi_profile": e.rsi_profile,
-                    "killers_ship": e.killers_ship,
-                }
-            )
-        return out
+        return [
+            {
+                "id": e.id,
+                "player": e.player,
+                "victim": e.victim,
+                "time": e.time.isoformat(),
+                "zone": e.zone,
+                "weapon": e.weapon,
+                "damage_type": e.damage_type,
+                "mode": e.mode,
+                "game_mode": e.game_mode,
+                "rsi_profile": e.rsi_profile,
+                "killers_ship": e.killers_ship,
+                "avatar_url": e.avatar_url,
+                "organization_name": e.organization_name,
+                "organization_url": e.organization_url,
+            }
+            for e in evs
+        ]
     finally:
         db.close()
