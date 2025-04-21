@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 sys.path.insert(0, os.getcwd())
 
@@ -6,12 +7,20 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# pull in just your Base.metadata
-from models import Base
+# bring in your MetaData
+from models import Base  # <-- wherever you put your declarative Base
 
 config = context.config
+
+# logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# **inject the URL from the environment** **
+db_url = os.getenv("DATABASE_URL")
+if not db_url:
+    raise RuntimeError("DATABASE_URL environment variable not set")
+config.set_main_option("sqlalchemy.url", db_url)
 
 # point Alembic at your models
 target_metadata = Base.metadata
