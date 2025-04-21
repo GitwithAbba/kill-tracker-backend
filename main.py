@@ -116,9 +116,11 @@ class KillEvent(BaseModel):
     mode: Literal["pu-kill", "ac-kill"] = "pu-kill"
     client_ver: str
     killers_ship: str
-    avatar_url = Column(String, nullable=True)
-    organization_name = Column(String, nullable=True)
-    organization_url = Column(String, nullable=True)
+
+    # newly‐added, and now properly typed:
+    avatar_url: Optional[str] = None
+    organization_name: Optional[str] = None
+    organization_url: Optional[str] = None
 
 
 # in‐memory store; swap for your DB as needed
