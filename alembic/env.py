@@ -16,9 +16,6 @@ if config.config_file_name is not None:
 # point Alembic at your models
 target_metadata = Base.metadata
 
-# ensure the URL comes from your env var
-config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
-
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
