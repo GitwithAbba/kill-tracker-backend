@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 import os, datetime, asyncio, uuid
 from dotenv import load_dotenv
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Literal
 import requests
 from bs4 import BeautifulSoup
 
@@ -68,7 +68,7 @@ def fetch_rsi_profile(handle: str) -> dict:
 
 # ─── Models
 class KillEventModel(Base):
-    __tablename__ = "kill_events"
+    __tablename__ = "kills"
     id = Column(Integer, primary_key=True, index=True)
     player = Column(String)
     victim = Column(String)
@@ -76,10 +76,16 @@ class KillEventModel(Base):
     zone = Column(String)
     weapon = Column(String)
     damage_type = Column(String)
+    rsi_profile = Column(String)
+    game_mode = Column(String)
     mode = Column(String)
-    avatar_url = Column(String, nullable=True)
-    organization_name = Column(String, nullable=True)
-    organization_url = Column(String, nullable=True)
+    client_ver = Column(String)
+    killers_ship = Column(String)
+
+    # re‑added columns:
+    # avatar_url = Column(String, nullable=True)
+    # organization_name = Column(String, nullable=True)
+    # organization_url = Column(String, nullable=True)
 
 
 class APIKey(Base):
@@ -134,9 +140,16 @@ class KillEvent(BaseModel):
     zone: str
     weapon: str
     damage_type: str
-    mode: str = "pu-kill"  # ← defaults to public‑universe
-    avatar_url: Optional[str] = None
-    organization: Optional[dict] = None
+    rsi_profile: str
+    game_mode: str
+    mode: Literal["pu-kill", "ac-kill"] = "pu-kill"
+    client_ver: str
+    killers_ship: str
+
+    # now re‑add these:
+    # avatar_url: Optional[str] = None
+    # organization_name: Optional[str] = None
+    # organization_url: Optional[str] = None
 
 
 # in‐memory store; swap for your DB as needed
