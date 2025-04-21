@@ -10,8 +10,8 @@ import os, datetime, asyncio, uuid
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Optional, Literal
-import requests
 from bs4 import BeautifulSoup
+import requests
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -216,12 +216,11 @@ def validate_key(api_key: APIKey = Depends(get_api_key)):
     return {"status": "ok"}
 
 
-# ─── Report Kill (protected)
+# ─── Report Kill (protected) ────────────────────────────────────────────────
 @app.post("/reportKill", tags=["Kills"])
 def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
     db = SessionLocal()
     try:
-        # only write the columns we actually defined
         db_event = KillEventModel(
             player=event.player,
             victim=event.victim,
@@ -245,24 +244,29 @@ def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
         db.close()
 
 
-# ─── List Kills
+# ─── List Kills ───────────────────────────────────────────────────────────────
 @app.get("/kills", tags=["Kills"])
 def list_kills():
     db = SessionLocal()
     try:
         evs = db.query(KillEventModel).order_by(KillEventModel.id).all()
-        return [
-            {
-                "id": e.id,
-                "player": e.player,
-                "victim": e.victim,
-                "time": e.time,
-                "zone": e.zone,
-                "weapon": e.weapon,
-                "damage_type": e.damage_type,
-                "mode": e.mode,
-            }
-            for e in evs
-        ]
+        out = []
+        for e in evs:
+            out.append(
+                {
+                    "id": e.id,
+                    "player": e.player,
+                    "victim": e.victim,
+                    "time": e.time.isoformat(),
+                    "zone": e.zone,
+                    "weapon": e.weapon,
+                    "damage_type": e.damage_type,
+                    "mode": e.mode,
+                    "game_mode": e.game_mode,
+                    "rsi_profile": e.rsi_profile,
+                    "killers_ship": e.killers_ship,
+                }
+            )
+        return out
     finally:
         db.close()
