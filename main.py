@@ -242,6 +242,7 @@ def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
         db.rollback()
         raise HTTPException(500, str(e))
     finally:
+        db.close()
 
 
 # ─── List Kills
@@ -250,21 +251,18 @@ def list_kills():
     db = SessionLocal()
     try:
         evs = db.query(KillEventModel).order_by(KillEventModel.id).all()
-        out = []
-        for e in evs:
-            out.append({
+        return [
+            {
                 "id": e.id,
                 "player": e.player,
                 "victim": e.victim,
-                "time": e.time.isoformat(),
+                "time": e.time,
                 "zone": e.zone,
                 "weapon": e.weapon,
                 "damage_type": e.damage_type,
                 "mode": e.mode,
-                "game_mode": e.game_mode,
-                "rsi_profile": e.rsi_profile,
-                "killers_ship": e.killers_ship,
-            })
-        return out
+            }
+            for e in evs
+        ]
     finally:
         db.close()
