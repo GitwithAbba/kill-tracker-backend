@@ -221,25 +221,20 @@ def validate_key(api_key: APIKey = Depends(get_api_key)):
 def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
     db = SessionLocal()
     try:
-        # 1) scrape RSI for the killer
-        killer_meta = fetch_rsi_profile(event.player)
-
-        # 2) scrape RSI for the victim
-        victim_meta = fetch_rsi_profile(event.victim)
-
-        # 3) build your dict() and inject the new fields
-        data = event.dict()
-        data["avatar_url"] = killer_meta["avatar_url"]
-        data["organization"] = victim_meta["organization"]
-
-        # 4) pull out organization sub‑fields for your SQL model
-        org = data["organization"]
+        # only write the columns we actually defined
         db_event = KillEventModel(
-            **{k: v for k, v in data.items() if k in KillEventModel.__table__.columns},
-            organization_name=org.get("name"),
-            organization_url=org.get("url"),
+            player=event.player,
+            victim=event.victim,
+            time=event.time,
+            zone=event.zone,
+            weapon=event.weapon,
+            damage_type=event.damage_type,
+            rsi_profile=event.rsi_profile,
+            game_mode=event.game_mode,
+            mode=event.mode,
+            client_ver=event.client_ver,
+            killers_ship=event.killers_ship,
         )
-
         db.add(db_event)
         db.commit()
         return {"status": "ok", "message": "Kill recorded"}
@@ -247,7 +242,6 @@ def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
         db.rollback()
         raise HTTPException(500, str(e))
     finally:
-        db.close()
 
 
 # ─── List Kills
@@ -256,18 +250,21 @@ def list_kills():
     db = SessionLocal()
     try:
         evs = db.query(KillEventModel).order_by(KillEventModel.id).all()
-        return [
-            {
+        out = []
+        for e in evs:
+            out.append({
                 "id": e.id,
                 "player": e.player,
                 "victim": e.victim,
-                "time": e.time,
+                "time": e.time.isoformat(),
                 "zone": e.zone,
                 "weapon": e.weapon,
                 "damage_type": e.damage_type,
                 "mode": e.mode,
-            }
-            for e in evs
-        ]
+                "game_mode": e.game_mode,
+                "rsi_profile": e.rsi_profile,
+                "killers_ship": e.killers_ship,
+            })
+        return out
     finally:
         db.close()
