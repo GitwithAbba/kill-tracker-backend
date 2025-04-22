@@ -1,23 +1,18 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, String, Integer, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from contextlib import asynccontextmanager
-import os
-import uuid
-import asyncio
-import datetime
+import os, datetime, asyncio, uuid
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Optional, Literal
 from bs4 import BeautifulSoup
 import requests
-
-
-# ← only import these from your models.py
-from models import engine, Base, KillEventModel, DeathEventModel, APIKey, SessionLocal
+from models import Base, KillEventModel, APIKey
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -26,6 +21,17 @@ if env_path.exists():
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 print(f"🔍 DATABASE_URL is: {DATABASE_URL}")
+
+# ─── SQLAlchemy setup
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=(
+        {"check_same_thread": False}
+        if DATABASE_URL.startswith("sqlite")
+        else {"connect_timeout": 5}
+    ),
+)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
 def fetch_rsi_profile(handle: str) -> dict:
@@ -122,24 +128,11 @@ class KillEvent(BaseModel):
     mode: Literal["pu-kill", "ac-kill"] = "pu-kill"
     client_ver: str
     killers_ship: str
+
+    # newly‐added, and now properly typed:
     avatar_url: Optional[str] = None
     organization_name: Optional[str] = None
     organization_url: Optional[str] = None
-
-
-# ─── Auth dependency
-def get_api_key(authorization: str = Header(..., alias="Authorization")) -> APIKey:
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-        raise HTTPException(401, "Missing or invalid Authorization header")
-    db = SessionLocal()
-    try:
-        key = db.query(APIKey).filter_by(key=token).first()
-        if not key:
-            raise HTTPException(401, "Invalid API key")
-        return key
-    finally:
-        db.close()
 
 
 # in‐memory store; swap for your DB as needed
@@ -156,62 +149,30 @@ class DeathEvent(BaseModel):
     rsi_profile: str
     game_mode: str
     killers_ship: str
-    avatar_url: Optional[str] = None
-    organization_name: Optional[str] = None
-    organization_url: Optional[str] = None
 
 
-# 2) Route to accept POST /reportDeath
 @app.post("/reportDeath", status_code=201)
-def report_death(evt: DeathEventIn, api_key: APIKey = Depends(get_api_key)):
-    db = SessionLocal()
-    try:
-        # convert time -> datetime
-        dt = datetime.datetime.fromisoformat(evt.time.rstrip("Z"))
-        db_evt = DeathEventModel(
-            killer=evt.killer,
-            victim=evt.victim,
-            time=dt,
-            zone=evt.zone,
-            weapon=evt.weapon,
-            damage_type=evt.damage_type,
-            rsi_profile=evt.rsi_profile,
-            game_mode=evt.game_mode,
-            killers_ship=evt.killers_ship,
-            avatar_url=evt.avatar_url,
-            organization_name=evt.organization_name,
-            organization_url=evt.organization_url,
-        )
-        db.add(db_evt)
-        db.commit()
-        return {"ok": True}
-    finally:
-        db.close()
+async def report_death(evt: DeathEvent):
+    deaths.append(evt.dict())
+    return {"ok": True}
 
 
-# 3) Route to GET /deaths
-@app.get("/deaths", response_model=List[DeathEventIn])
-def list_deaths(api_key: APIKey = Depends(get_api_key)):
+@app.get("/deaths", response_model=List[DeathEvent])
+async def list_deaths():
+    return deaths
+
+
+# ─── Auth dependency
+def get_api_key(authorization: str = Header(..., alias="Authorization")) -> APIKey:
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(401, "Missing or invalid Authorization header")
     db = SessionLocal()
     try:
-        rows = db.query(DeathEventModel).order_by(DeathEventModel.time).all()
-        return [
-            {
-                "killer": r.killer,
-                "victim": r.victim,
-                "time": r.time.isoformat() + "Z",
-                "zone": r.zone,
-                "weapon": r.weapon,
-                "damage_type": r.damage_type,
-                "rsi_profile": r.rsi_profile,
-                "game_mode": r.game_mode,
-                "killers_ship": r.killers_ship,
-                "avatar_url": r.avatar_url,
-                "organization_name": r.organization_name,
-                "organization_url": r.organization_url,
-            }
-            for r in rows
-        ]
+        key = db.query(APIKey).filter_by(key=token).first()
+        if not key:
+            raise HTTPException(401, "Invalid API key")
+        return key
     finally:
         db.close()
 
