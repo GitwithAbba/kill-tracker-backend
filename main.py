@@ -35,34 +35,31 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
 def fetch_rsi_profile(handle: str) -> dict:
+    """
+    Scrape the RSI citizen page for:
+      • avatar_url (og:image)
+      • the main organization (href contains '/orgs/')
+    """
     url = f"https://robertsspaceindustries.com/citizens/{handle}"
     try:
         r = requests.get(url, timeout=5)
         r.raise_for_status()
     except Exception:
+        # if anything goes wrong, just return no‐org/no‐avatar
         return {"avatar_url": None, "organization": {"name": None, "url": None}}
 
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # 1) OG image can appear as property="og:image" or "og:image:url"
-    avatar = None
-    for prop in ("og:image", "og:image:url"):
-        tag = soup.find("meta", property=prop)
-        if tag and tag.get("content"):
-            avatar = tag["content"]
-            break
+    # 1) OG image for avatar
+    ogimg = soup.find("meta", property="og:image")
+    avatar = ogimg["content"] if ogimg and ogimg.get("content") else None
 
-    # 2) Find the Main Organization link
-    #    – first by the old CSS hook, fallback to any href containing "organization"
-    org_elem = soup.select_one("a.org-link") or soup.find(
-        "a",
-        href=lambda href: href and "organization" in href.lower(),
-    )
-
-    if org_elem:
-        org_name = org_elem.get_text(strip=True)
+    # 2) Main organization — look for the first <a> whose href contains '/orgs/'
+    org_elem = soup.find("a", href=lambda href: href and "/orgs/" in href)
+    if org_elem and org_elem.text.strip():
+        org_name = org_elem.text.strip()
         org_url = org_elem["href"]
-        # make it absolute
+        # make absolute if it’s relative
         if org_url.startswith("/"):
             org_url = "https://robertsspaceindustries.com" + org_url
     else:
