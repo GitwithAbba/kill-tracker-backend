@@ -8,12 +8,14 @@ from contextlib import asynccontextmanager
 import os
 import uuid
 import asyncio
-from datetime import datetime
+import datetime
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Optional, Literal
 from bs4 import BeautifulSoup
 import requests
+from fastapi import Depends, HTTPException, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
 # ← only import these from your models.py
@@ -128,10 +130,10 @@ class KillEvent(BaseModel):
 
 
 # ─── Auth dependency
-def get_api_key(authorization: str = Header(..., alias="Authorization")) -> APIKey:
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-        raise HTTPException(401, "Missing or invalid Authorization header")
+def get_api_key(
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+) -> APIKey:
+    token = credentials.credentials  # the raw UUID token
     db = SessionLocal()
     try:
         key = db.query(APIKey).filter_by(key=token).first()
@@ -149,7 +151,7 @@ deaths: List[dict] = []
 class DeathEvent(BaseModel):
     killer: str
     victim: str
-    time: str
+    time: datetime.datetime
     zone: str
     weapon: str
     damage_type: str
@@ -205,16 +207,6 @@ def list_deaths(api_key: APIKey = Depends(get_api_key)):
 
 
 # ─── Create API key
-@app.post("/keys", status_code=status.HTTP_201_CREATED, tags=["Auth"])
-def create_key(discord_id: str = Header(..., alias="X-Discord-ID")):
-    db = SessionLocal()
-    try:
-        new_key = str(uuid.uuid4())
-        db.add(APIKey(key=new_key, discord_id=discord_id))
-        db.commit()
-        return {"key": new_key}
-    finally:
-        db.close()
 
 
 # VALIDATE KEY
