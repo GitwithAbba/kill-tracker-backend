@@ -1,13 +1,14 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, String, Integer, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from contextlib import asynccontextmanager
-import os, asyncio, uuid
-from datetime import datetime  # ← changed!
+import os
+import uuid
+import asyncio
+from datetime import datetime
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Optional, Literal
