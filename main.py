@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 
 # ← only import these from your models.py
-from models import Base, KillEventModel, DeathEventModel, APIKey
+from models import Base, KillEventModel, DeathEventModel, APIKey, SessionLocal
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
