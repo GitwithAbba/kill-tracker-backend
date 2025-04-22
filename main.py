@@ -44,7 +44,7 @@ def fetch_rsi_profile(handle: str) -> dict:
 
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # 1) OG avatar (same as before) …
+    # OG avatar (unchanged)…
     avatar = None
     for prop in ("og:image", "og:image:url"):
         tag = soup.find("meta", property=prop)
@@ -52,16 +52,27 @@ def fetch_rsi_profile(handle: str) -> dict:
             avatar = tag["content"]
             break
 
-    # 2) Main organization — look for the /orgs/ link, not the /organizations/ tab
-    org_elem = soup.find("a", href=lambda href: href and "/orgs/" in href)
-    if org_elem:
-        org_name = org_elem.get_text(strip=True)
-        org_url = org_elem["href"]
-        if org_url.startswith("/"):
-            org_url = "https://robertsspaceindustries.com" + org_url
-    else:
-        org_name = None
-        org_url = None
+    # --- New: locate the Main Organization panel first ---
+    org_name = None
+    org_url = None
+
+    # 1) Find the section header text “MAIN ORGANIZATION”
+    header = soup.find(string=lambda t: t and "MAIN ORGANIZATION" in t.upper())
+    if header:
+        # 2) Climb up to that panel/container
+        panel = header.find_parent("section") or header.find_parent("div")
+        if panel:
+            # 3) Within that panel find the /orgs/ link
+            link = panel.find("a", href=lambda h: h and "/orgs/" in h)
+            if link:
+                org_name = link.get_text(strip=True) or None
+                href = link["href"]
+                # make it absolute
+                org_url = (
+                    href
+                    if href.startswith("http")
+                    else "https://robertsspaceindustries.com" + href
+                )
 
     return {
         "avatar_url": avatar,
