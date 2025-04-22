@@ -44,7 +44,7 @@ def fetch_rsi_profile(handle: str) -> dict:
 
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # OG avatar (unchanged)…
+    # 1) OG avatar
     avatar = None
     for prop in ("og:image", "og:image:url"):
         tag = soup.find("meta", property=prop)
@@ -52,27 +52,25 @@ def fetch_rsi_profile(handle: str) -> dict:
             avatar = tag["content"]
             break
 
-    # --- New: locate the Main Organization panel first ---
+    # 2) Org link
     org_name = None
     org_url = None
-
-    # 1) Find the section header text “MAIN ORGANIZATION”
-    header = soup.find(string=lambda t: t and "MAIN ORGANIZATION" in t.upper())
-    if header:
-        # 2) Climb up to that panel/container
-        panel = header.find_parent("section") or header.find_parent("div")
-        if panel:
-            # 3) Within that panel find the /orgs/ link
-            link = panel.find("a", href=lambda h: h and "/orgs/" in h)
-            if link:
-                org_name = link.get_text(strip=True) or None
-                href = link["href"]
-                # make it absolute
-                org_url = (
-                    href
-                    if href.startswith("http")
-                    else "https://robertsspaceindustries.com" + href
-                )
+    link = soup.find("a", href=lambda h: h and "/orgs/" in h)
+    if link:
+        href = link["href"]
+        # make absolute
+        org_url = (
+            href
+            if href.startswith("http")
+            else "https://robertsspaceindustries.com" + href
+        )
+        # try the link text, else fall back to slug
+        text = link.get_text(strip=True)
+        if text:
+            org_name = text
+        else:
+            # e.g. /orgs/BLACK6  → "BLACK6"
+            org_name = org_url.rstrip("/").rsplit("/", 1)[-1]
 
     return {
         "avatar_url": avatar,
