@@ -124,6 +124,21 @@ class KillEvent(BaseModel):
     organization_url: Optional[str] = None
 
 
+# ─── Auth dependency
+def get_api_key(authorization: str = Header(..., alias="Authorization")) -> APIKey:
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(401, "Missing or invalid Authorization header")
+    db = SessionLocal()
+    try:
+        key = db.query(APIKey).filter_by(key=token).first()
+        if not key:
+            raise HTTPException(401, "Invalid API key")
+        return key
+    finally:
+        db.close()
+
+
 # in‐memory store; swap for your DB as needed
 deaths: List[dict] = []
 
@@ -184,21 +199,6 @@ def list_deaths(api_key: APIKey = Depends(get_api_key)):
         }
         for r in rows
     ]
-
-
-# ─── Auth dependency
-def get_api_key(authorization: str = Header(..., alias="Authorization")) -> APIKey:
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-        raise HTTPException(401, "Missing or invalid Authorization header")
-    db = SessionLocal()
-    try:
-        key = db.query(APIKey).filter_by(key=token).first()
-        if not key:
-            raise HTTPException(401, "Invalid API key")
-        return key
-    finally:
-        db.close()
 
 
 # ─── Create API key
