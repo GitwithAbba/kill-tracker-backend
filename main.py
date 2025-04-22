@@ -14,8 +14,6 @@ from pathlib import Path
 from typing import List, Optional, Literal
 from bs4 import BeautifulSoup
 import requests
-from fastapi import Depends, HTTPException, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
 # ← only import these from your models.py
@@ -130,10 +128,10 @@ class KillEvent(BaseModel):
 
 
 # ─── Auth dependency
-def get_api_key(
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
-) -> APIKey:
-    token = credentials.credentials  # the raw UUID token
+def get_api_key(authorization: str = Header(..., alias="Authorization")) -> APIKey:
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(401, "Missing or invalid Authorization header")
     db = SessionLocal()
     try:
         key = db.query(APIKey).filter_by(key=token).first()
@@ -165,22 +163,36 @@ class DeathEvent(BaseModel):
 
 @app.post("/reportDeath", status_code=201)
 async def report_death(evt: DeathEvent, api_key: APIKey = Depends(get_api_key)):
+    # 1) scrape killer’s metadata if you ever want it
+    #    (not strictly necessary for victim org, so omitted here)
+
+    # 2) scrape *victim*’s org & avatar
+    victim_meta = fetch_rsi_profile(evt.victim)
+
     db = SessionLocal()
-    db_evt = DeathEventModel(
-        killer=evt.killer,
-        victim=evt.victim,
-        time=datetime.fromisoformat(evt.time),
-        zone=evt.zone,
-        weapon=evt.weapon,
-        damage_type=evt.damage_type,
-        rsi_profile=evt.rsi_profile,
-        game_mode=evt.game_mode,
-        killers_ship=evt.killers_ship,
-        # avatar_url / organization_* if you scraped those
-    )
-    db.add(db_evt)
-    db.commit()
-    return {"ok": True}
+    try:
+        db_evt = DeathEventModel(
+            killer=evt.killer,
+            victim=evt.victim,
+            time=datetime.fromisoformat(evt.time),
+            zone=evt.zone,
+            weapon=evt.weapon,
+            damage_type=evt.damage_type,
+            rsi_profile=evt.rsi_profile,
+            game_mode=evt.game_mode,
+            killers_ship=evt.killers_ship,
+            avatar_url=victim_meta["avatar_url"],
+            organization_name=victim_meta["organization"]["name"],
+            organization_url=victim_meta["organization"]["url"],
+        )
+        db.add(db_evt)
+        db.commit()
+        return {"ok": True}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
+    finally:
+        db.close()
 
 
 @app.get("/deaths", response_model=List[DeathEvent])
@@ -207,6 +219,16 @@ def list_deaths(api_key: APIKey = Depends(get_api_key)):
 
 
 # ─── Create API key
+@app.post("/keys", status_code=status.HTTP_201_CREATED, tags=["Auth"])
+def create_key(discord_id: str = Header(..., alias="X-Discord-ID")):
+    db = SessionLocal()
+    try:
+        new_key = str(uuid.uuid4())
+        db.add(APIKey(key=new_key, discord_id=discord_id))
+        db.commit()
+        return {"key": new_key}
+    finally:
+        db.close()
 
 
 # VALIDATE KEY
