@@ -1,20 +1,22 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, String, Integer, DateTime
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from contextlib import asynccontextmanager
-import os, datetime, asyncio, uuid
+import os, asyncio, uuid
+from datetime import datetime  # ← changed!
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Optional, Literal
-import requests
 from bs4 import BeautifulSoup
+import requests
 
 
 # ← only import these from your models.py
-from models import engine, SessionLocal, Base, KillEventModel, DeathEventModel, APIKey
+from models import engine, Base, KillEventModel, DeathEventModel, APIKey, SessionLocal
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -116,7 +118,7 @@ class KillEvent(BaseModel):
     damage_type: str
     rsi_profile: str
     game_mode: str
-    mode: Literal["pu-kill", "ac-kill"]
+    mode: Literal["pu-kill", "ac-kill"] = "pu-kill"
     client_ver: str
     killers_ship: str
     avatar_url: Optional[str] = None
