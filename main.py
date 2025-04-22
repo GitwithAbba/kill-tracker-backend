@@ -1,8 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, String, Integer, DateTime
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from contextlib import asynccontextmanager
@@ -10,9 +9,12 @@ import os, datetime, asyncio, uuid
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Optional, Literal
-from bs4 import BeautifulSoup
 import requests
-from models import Base, KillEventModel, APIKey
+from bs4 import BeautifulSoup
+
+
+# ← only import these from your models.py
+from models import Base, KillEventModel, DeathEventModel, APIKey, SessionLocal
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -125,11 +127,9 @@ class KillEvent(BaseModel):
     damage_type: str
     rsi_profile: str
     game_mode: str
-    mode: Literal["pu-kill", "ac-kill"] = "pu-kill"
+    mode: Literal["pu-kill", "ac-kill"]
     client_ver: str
     killers_ship: str
-
-    # newly‐added, and now properly typed:
     avatar_url: Optional[str] = None
     organization_name: Optional[str] = None
     organization_url: Optional[str] = None
@@ -149,34 +149,52 @@ class DeathEvent(BaseModel):
     rsi_profile: str
     game_mode: str
     killers_ship: str
-
-    # newly added:
     avatar_url: Optional[str] = None
     organization_name: Optional[str] = None
     organization_url: Optional[str] = None
 
 
 @app.post("/reportDeath", status_code=201)
-async def report_death(evt: DeathEvent):
-    # scrape the killer’s metadata
-    killer_meta = fetch_rsi_profile(evt.killer)
-
-    # build a dict that includes the extra fields
-    d = evt.dict()
-    d.update(
-        {
-            "avatar_url": killer_meta["avatar_url"],
-            "organization_name": killer_meta["organization"]["name"],
-            "organization_url": killer_meta["organization"]["url"],
-        }
+async def report_death(evt: DeathEvent, api_key: APIKey = Depends(get_api_key)):
+    db = SessionLocal()
+    db_evt = DeathEventModel(
+        killer=evt.killer,
+        victim=evt.victim,
+        time=datetime.fromisoformat(evt.time),
+        zone=evt.zone,
+        weapon=evt.weapon,
+        damage_type=evt.damage_type,
+        rsi_profile=evt.rsi_profile,
+        game_mode=evt.game_mode,
+        killers_ship=evt.killers_ship,
+        # avatar_url / organization_* if you scraped those
     )
-
-    deaths.append(d)
+    db.add(db_evt)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/deaths", response_model=List[DeathEvent])
-async def list_deaths():
-    return deaths
+def list_deaths(api_key: APIKey = Depends(get_api_key)):
+    db = SessionLocal()
+    rows = db.query(DeathEventModel).order_by(DeathEventModel.time).all()
+    return [
+        {
+            "killer": r.killer,
+            "victim": r.victim,
+            "time": r.time.isoformat(),
+            "zone": r.zone,
+            "weapon": r.weapon,
+            "damage_type": r.damage_type,
+            "rsi_profile": r.rsi_profile,
+            "game_mode": r.game_mode,
+            "killers_ship": r.killers_ship,
+            "avatar_url": r.avatar_url,
+            "organization_name": r.organization_name,
+            "organization_url": r.organization_url,
+        }
+        for r in rows
+    ]
 
 
 # ─── Auth dependency

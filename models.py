@@ -25,6 +25,23 @@ class KillEventModel(Base):
     organization_url = Column(String, nullable=True)
 
 
+class DeathEventModel(Base):
+    __tablename__ = "deaths"
+    id = Column(Integer, primary_key=True, index=True)
+    killer = Column(String)
+    victim = Column(String)
+    time = Column(DateTime)
+    zone = Column(String)
+    weapon = Column(String)
+    damage_type = Column(String)
+    rsi_profile = Column(String)
+    game_mode = Column(String)
+    killers_ship = Column(String)
+    avatar_url = Column(String, nullable=True)
+    organization_name = Column(String, nullable=True)
+    organization_url = Column(String, nullable=True)
+
+
 class APIKey(Base):
     __tablename__ = "api_keys"
     key = Column(String, primary_key=True, index=True)
