@@ -150,11 +150,28 @@ class DeathEvent(BaseModel):
     game_mode: str
     killers_ship: str
 
+    # newly added:
+    avatar_url: Optional[str] = None
+    organization_name: Optional[str] = None
+    organization_url: Optional[str] = None
+
 
 @app.post("/reportDeath", status_code=201)
 async def report_death(evt: DeathEvent):
-    deaths.append(evt.dict())
-    return {"ok": True}
+    # scrape the killer’s metadata
+    killer_meta = fetch_rsi_profile(evt.killer)
+
+    # build a dict that includes the extra fields
+    d = evt.dict()
+    d.update(
+        {
+            "avatar_url": killer_meta["avatar_url"],
+            "organization_name": killer_meta["organization"]["name"],
+            "organization_url": killer_meta["organization"]["url"],
+        }
+    )
+
+    deaths.append(d)
 
 
 @app.get("/deaths", response_model=List[DeathEvent])
