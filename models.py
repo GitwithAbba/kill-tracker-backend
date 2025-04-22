@@ -1,9 +1,30 @@
-# models.py
-import datetime
-from sqlalchemy import Column, String, Integer, DateTime
+import os
+from sqlalchemy import create_engine, Column, String, Integer, DateTime
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+from pathlib import Path
 
+# load .env.local if present (for local dev only)
+env_path = Path(__file__).parent / ".env.local"
+if env_path.exists():
+    load_dotenv(env_path)
+
+DATABASE_URL = os.environ["DATABASE_URL"]
+
+# ─── SQLAlchemy setup ───────────────────────────────────────────────────
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=(
+        {"check_same_thread": False}
+        if DATABASE_URL.startswith("sqlite")
+        else {"connect_timeout": 5}
+    ),
+)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
+
+# ─── Models ───────────────────────────────────────────────────────────────
 
 
 class KillEventModel(Base):
@@ -46,4 +67,4 @@ class APIKey(Base):
     __tablename__ = "api_keys"
     key = Column(String, primary_key=True, index=True)
     discord_id = Column(String, index=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime)

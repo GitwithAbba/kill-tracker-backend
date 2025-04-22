@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 
 # ← only import these from your models.py
-from models import Base, KillEventModel, DeathEventModel, APIKey, SessionLocal
+from models import engine, SessionLocal, Base, KillEventModel, DeathEventModel, APIKey
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -23,17 +23,6 @@ if env_path.exists():
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 print(f"🔍 DATABASE_URL is: {DATABASE_URL}")
-
-# ─── SQLAlchemy setup
-engine = create_engine(
-    DATABASE_URL,
-    connect_args=(
-        {"check_same_thread": False}
-        if DATABASE_URL.startswith("sqlite")
-        else {"connect_timeout": 5}
-    ),
-)
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
 def fetch_rsi_profile(handle: str) -> dict:
