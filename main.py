@@ -35,14 +35,6 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
 def fetch_rsi_profile(handle: str) -> dict:
-    """
-    Scrape RSI citizen page for avatar and organization.
-    Returns:
-      {
-        "avatar_url": Optional[str],
-        "organization": {"name": Optional[str], "url": Optional[str]}
-      }
-    """
     url = f"https://robertsspaceindustries.com/citizens/{handle}"
     try:
         r = requests.get(url, timeout=5)
@@ -60,12 +52,17 @@ def fetch_rsi_profile(handle: str) -> dict:
             avatar = tag["content"]
             break
 
-    # 2) Find the first <a> linking into an organization page
-    org_elem = soup.find("a", href=lambda href: href and "/organizations/" in href)
+    # 2) Find the Main Organization link
+    #    – first by the old CSS hook, fallback to any href containing "organization"
+    org_elem = soup.select_one("a.org-link") or soup.find(
+        "a",
+        href=lambda href: href and "organization" in href.lower(),
+    )
+
     if org_elem:
         org_name = org_elem.get_text(strip=True)
         org_url = org_elem["href"]
-        # Absolute‑ify relative hrefs
+        # make it absolute
         if org_url.startswith("/"):
             org_url = "https://robertsspaceindustries.com" + org_url
     else:
