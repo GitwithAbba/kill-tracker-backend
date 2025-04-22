@@ -35,17 +35,39 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
 def fetch_rsi_profile(handle: str) -> dict:
+    """
+    Scrape RSI citizen page for avatar and organization.
+    Returns:
+      {
+        "avatar_url": Optional[str],
+        "organization": {"name": Optional[str], "url": Optional[str]}
+      }
+    """
     url = f"https://robertsspaceindustries.com/citizens/{handle}"
-    r = requests.get(url, timeout=5)
+    try:
+        r = requests.get(url, timeout=5)
+        r.raise_for_status()
+    except Exception:
+        return {"avatar_url": None, "organization": {"name": None, "url": None}}
+
     soup = BeautifulSoup(r.text, "html.parser")
 
-    ogimg = soup.find("meta", property="og:image")
-    avatar = ogimg["content"] if ogimg else None
+    # 1) OG image can appear as property="og:image" or "og:image:url"
+    avatar = None
+    for prop in ("og:image", "og:image:url"):
+        tag = soup.find("meta", property=prop)
+        if tag and tag.get("content"):
+            avatar = tag["content"]
+            break
 
-    org_elem = soup.select_one("a.org-link")
+    # 2) Find the first <a> linking into an organization page
+    org_elem = soup.find("a", href=lambda href: href and "/organizations/" in href)
     if org_elem:
-        org_name = org_elem.text.strip()
+        org_name = org_elem.get_text(strip=True)
         org_url = org_elem["href"]
+        # Absolute‑ify relative hrefs
+        if org_url.startswith("/"):
+            org_url = "https://robertsspaceindustries.com" + org_url
     else:
         org_name = None
         org_url = None
