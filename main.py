@@ -174,9 +174,8 @@ class DeathEvent(BaseModel):
 
 @app.post("/reportDeath", status_code=201)
 def report_death(evt: DeathEvent, api_key: APIKey = Depends(get_api_key)):
-    # scrape the victim’s profile
-    victim_meta = fetch_rsi_profile(evt.victim)
-    org = victim_meta["organization"]
+    # 1) scrape the killer’s profile for avatar & org
+    killer_meta = fetch_rsi_profile(evt.killer)
 
     db = SessionLocal()
     try:
@@ -190,9 +189,9 @@ def report_death(evt: DeathEvent, api_key: APIKey = Depends(get_api_key)):
             rsi_profile=evt.rsi_profile,
             game_mode=evt.game_mode,
             killers_ship=evt.killers_ship,
-            avatar_url=victim_meta["avatar_url"],
-            organization_name=org["name"],
-            organization_url=org["url"],
+            avatar_url=killer_meta["avatar_url"],
+            organization_name=killer_meta["organization"]["name"],
+            organization_url=killer_meta["organization"]["url"],
         )
         db.add(db_evt)
         db.commit()
