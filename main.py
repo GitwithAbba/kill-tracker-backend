@@ -1,8 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, String, Integer, DateTime
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from contextlib import asynccontextmanager
@@ -12,7 +11,9 @@ from pathlib import Path
 from typing import List, Optional, Literal
 from bs4 import BeautifulSoup
 import requests
-from models import Base, KillEventModel, APIKey
+
+# ← Import your models *including* DeathEventModel, and your APIKey class
+from models import Base, KillEventModel, DeathEventModel, APIKey
 
 # ─── Load .env.local if present
 env_path = Path(__file__).parent / ".env.local"
@@ -32,6 +33,21 @@ engine = create_engine(
     ),
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+
+# ─── Auth dependency
+def get_api_key(authorization: str = Header(..., alias="Authorization")) -> APIKey:
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(401, "Missing or invalid Authorization header")
+    db = SessionLocal()
+    try:
+        key = db.query(APIKey).filter_by(key=token).first()
+        if not key:
+            raise HTTPException(401, "Invalid API key")
+        return key
+    finally:
+        db.close()
 
 
 def fetch_rsi_profile(handle: str) -> dict:
@@ -150,29 +166,63 @@ class DeathEvent(BaseModel):
     game_mode: str
     killers_ship: str
 
+    # New fields:
+    avatar_url: Optional[str] = None
+    organization_name: Optional[str] = None
+    organization_url: Optional[str] = None
+
 
 @app.post("/reportDeath", status_code=201)
-async def report_death(evt: DeathEvent):
-    deaths.append(evt.dict())
-    return {"ok": True}
+def report_death(evt: DeathEvent, api_key: APIKey = Depends(get_api_key)):
+    # scrape the victim’s profile
+    victim_meta = fetch_rsi_profile(evt.victim)
+    org = victim_meta["organization"]
+
+    db = SessionLocal()
+    try:
+        db_evt = DeathEventModel(
+            killer=evt.killer,
+            victim=evt.victim,
+            time=datetime.datetime.fromisoformat(evt.time.rstrip("Z")),
+            zone=evt.zone,
+            weapon=evt.weapon,
+            damage_type=evt.damage_type,
+            rsi_profile=evt.rsi_profile,
+            game_mode=evt.game_mode,
+            killers_ship=evt.killers_ship,
+            avatar_url=victim_meta["avatar_url"],
+            organization_name=org["name"],
+            organization_url=org["url"],
+        )
+        db.add(db_evt)
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
 
 
 @app.get("/deaths", response_model=List[DeathEvent])
-async def list_deaths():
-    return deaths
-
-
-# ─── Auth dependency
-def get_api_key(authorization: str = Header(..., alias="Authorization")) -> APIKey:
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-        raise HTTPException(401, "Missing or invalid Authorization header")
+def list_deaths(api_key: APIKey = Depends(get_api_key)):
     db = SessionLocal()
     try:
-        key = db.query(APIKey).filter_by(key=token).first()
-        if not key:
-            raise HTTPException(401, "Invalid API key")
-        return key
+        rows = db.query(DeathEventModel).order_by(DeathEventModel.time).all()
+        return [
+            {
+                "killer": r.killer,
+                "victim": r.victim,
+                "time": r.time.isoformat() + "Z",
+                "zone": r.zone,
+                "weapon": r.weapon,
+                "damage_type": r.damage_type,
+                "rsi_profile": r.rsi_profile,
+                "game_mode": r.game_mode,
+                "killers_ship": r.killers_ship,
+                "avatar_url": r.avatar_url,
+                "organization_name": r.organization_name,
+                "organization_url": r.organization_url,
+            }
+            for r in rows
+        ]
     finally:
         db.close()
 
