@@ -1,0 +1,16 @@
+name: Keep Backend Awake
+
+# Every 10 minutes
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+
+jobs:
+  ping-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl backend health
+        run: |
+          curl --fail https://your-backend-domain.com/health \
+            -H "Accept: application/json" \
+            || echo "⚠️ Backend health check failed"
