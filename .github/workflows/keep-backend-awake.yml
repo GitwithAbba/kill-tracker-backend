@@ -11,6 +11,6 @@ jobs:
     steps:
       - name: Curl backend health
         run: |
-          curl --fail https://your-backend-domain.com/health \
+          curl --fail https://kill-tracker-backend-production.up.railway.app/healthz \
             -H "Accept: application/json" \
             || echo "⚠️ Backend health check failed"
