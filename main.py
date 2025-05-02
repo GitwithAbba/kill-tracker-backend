@@ -144,6 +144,7 @@ class KillEvent(BaseModel):
     mode: Literal["pu-kill", "ac-kill"] = "pu-kill"
     client_ver: str
     killers_ship: str
+    victim_ship: Optional[str] = None
 
     # newly‐added, and now properly typed:
     avatar_url: Optional[str] = None
@@ -165,6 +166,7 @@ class DeathEvent(BaseModel):
     rsi_profile: str
     game_mode: str
     killers_ship: str
+    victim_ship: Optional[str] = None
 
     # New fields:
     avatar_url: Optional[str] = None
@@ -189,6 +191,7 @@ def report_death(evt: DeathEvent, api_key: APIKey = Depends(get_api_key)):
             rsi_profile=evt.rsi_profile,
             game_mode=evt.game_mode,
             killers_ship=evt.killers_ship,
+            victim_ship=evt.victim_ship,
             avatar_url=killer_meta["avatar_url"],
             organization_name=killer_meta["organization"]["name"],
             organization_url=killer_meta["organization"]["url"],
@@ -216,6 +219,7 @@ def list_deaths(api_key: APIKey = Depends(get_api_key)):
                 "rsi_profile": r.rsi_profile,
                 "game_mode": r.game_mode,
                 "killers_ship": r.killers_ship,
+                "victim_ship": r.victim_ship,
                 "avatar_url": r.avatar_url,
                 "organization_name": r.organization_name,
                 "organization_url": r.organization_url,
@@ -271,6 +275,7 @@ def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
             mode=event.mode,
             client_ver=event.client_ver,
             killers_ship=event.killers_ship,
+            victim_ship=event.victim_ship,
             avatar_url=killer_meta["avatar_url"],
             organization_name=victim_meta["organization"]["name"],
             organization_url=victim_meta["organization"]["url"],
@@ -304,6 +309,7 @@ def list_kills():
                 "game_mode": e.game_mode,
                 "rsi_profile": e.rsi_profile,
                 "killers_ship": e.killers_ship,
+                "victim_ship": e.victim_ship,
                 "avatar_url": e.avatar_url,
                 "organization_name": e.organization_name,
                 "organization_url": e.organization_url,
