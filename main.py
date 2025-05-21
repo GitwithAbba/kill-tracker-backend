@@ -158,6 +158,7 @@ deaths: List[dict] = []
 
 
 class DeathEvent(BaseModel):
+    id: int
     killer: str
     victim: str
     time: str
