@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, status
+from fastapi import FastAPI, HTTPException, Depends, Header, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine
@@ -19,6 +19,7 @@ from models import Base, KillEventModel, DeathEventModel, APIKey
 env_path = Path(__file__).parent / ".env.local"
 if env_path.exists():
     load_dotenv(env_path)
+
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 print(f"🔍 DATABASE_URL is: {DATABASE_URL}")
@@ -103,14 +104,14 @@ async def lifespan(app: FastAPI):
             print("✅ Tables are ready")
             break
         except OperationalError:
-            print(f"⚠️ DB not ready (attempt {attempt+1}/10)… retrying in 2s")
+            print(f"⚠️ DB not ready (attempt {attempt}/10)… retrying in 2s")
             await asyncio.sleep(2)
     else:
         raise RuntimeError("❌ Could not initialize DB")
     yield
 
 
-# ─── FastAPI + CORS
+# ─── FastAPI  CORS
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -203,13 +204,35 @@ def report_death(evt: DeathEvent, api_key: APIKey = Depends(get_api_key)):
         db.close()
 
 
-@app.get("/deaths", response_model=List[DeathEvent])
-def list_deaths(api_key: APIKey = Depends(get_api_key)):
+@app.get("/deaths", tags=["Deaths"], response_model=List[DeathEvent])
+def list_deaths(
+    since: Optional[int] = Query(None, description="only return events with id > this"),
+    since_time: Optional[str] = Query(
+        None,
+        description="only return events with time >= this ISO-8601 timestamp",
+    ),
+    api_key: APIKey = Depends(get_api_key),
+):
     db = SessionLocal()
     try:
-        rows = db.query(DeathEventModel).order_by(DeathEventModel.time).all()
+        # build base query
+        q = db.query(DeathEventModel)
+
+        # apply since-filter if present
+        if since is not None:
+            q = q.filter(DeathEventModel.id > since)
+
+        if since_time is not None:
+            t0 = datetime.datetime.fromisoformat(since_time)
+            q = q.filter(DeathEventModel.time >= t0)
+
+        # order & fetch
+        rows = q.order_by(DeathEventModel.id).all()
+
+        # serialize exactly as before
         return [
             {
+                "id": r.id,
                 "killer": r.killer,
                 "victim": r.victim,
                 "time": r.time.isoformat() + "Z",
@@ -227,6 +250,7 @@ def list_deaths(api_key: APIKey = Depends(get_api_key)):
             for r in rows
         ]
     finally:
+
         db.close()
 
 
@@ -292,10 +316,32 @@ def report_kill(event: KillEvent, api_key: APIKey = Depends(get_api_key)):
 
 # ─── List Kills ───────────────────────────────────────────────────────────────
 @app.get("/kills", tags=["Kills"])
-def list_kills():
+def list_kills(
+    since: Optional[int] = Query(None, description="only return events with id > this"),
+    since_time: Optional[str] = Query(
+        None,
+        description="only return events with time >= this ISO-8601 timestamp",
+    ),
+    api_key: APIKey = Depends(get_api_key),
+):
     db = SessionLocal()
     try:
-        evs = db.query(KillEventModel).order_by(KillEventModel.id).all()
+        # build base query…
+        q = db.query(KillEventModel)
+
+        # if client asked for a since, apply it
+        if since is not None:
+            q = q.filter(KillEventModel.id > since)
+
+        if since_time is not None:
+            # parse the client’s ISO string into a datetime
+            t0 = datetime.datetime.fromisoformat(since_time)
+            q = q.filter(KillEventModel.time >= t0)
+
+        # order & fetch
+        evs = q.order_by(KillEventModel.id).all()
+
+        # serialize exactly as before
         return [
             {
                 "id": e.id,
