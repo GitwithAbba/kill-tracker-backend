@@ -158,7 +158,7 @@ deaths: List[dict] = []
 
 
 class DeathEvent(BaseModel):
-    id: int
+    id: Optional[int] = None  # ← now clients don’t have to send it
     killer: str
     victim: str
     time: str
