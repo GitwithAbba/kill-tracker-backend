@@ -1,4 +1,4 @@
-name Daily Google Sheet Sync
+name: Daily Google Sheet Sync
 
 on
   schedule
